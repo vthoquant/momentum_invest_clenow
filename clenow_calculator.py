@@ -16,7 +16,7 @@ class CLENOW_CALCULATOR(object):
     TRADING_DAYS = 250
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
-    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI'):
+    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None):
         self.start = start
         self.end = end
         self.capital = capital
@@ -29,6 +29,8 @@ class CLENOW_CALCULATOR(object):
         self.tickers= tickers
         self.sectors = None if tickers is None else dict(zip(tickers, [None] *  len(tickers)))
         self.bm_symbol = bm_symbol
+        self.path = path or self.path
+        self.file_name = file_name or 'default'
         self.bm_data_close = None
         self.data_adj_close = None
         self.data_high = None
@@ -164,4 +166,8 @@ class CLENOW_CALCULATOR(object):
         self.position_table['Allocation %'] = self.position_table['Allocation']/self.capital
         self.position_table.sort_values(by='mom_rank', ascending=True, inplace=True)
         self.position_table['Allocation % cumul'] = self.position_table['Allocation %'].cumsum()
+        
+    def save_rebalanced_portfolio(self):
+        full_path = "{}{}.csv".format(self.path, self.file_name)
+        self.position_table.to_csv(full_path)
             
