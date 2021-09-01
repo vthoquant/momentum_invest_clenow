@@ -8,7 +8,7 @@ import yfinance as yf
 import pandas_datareader.data as pdr
 import pandas as pd
 import numpy as np
-from talib.abstract import EMA, ATR
+from talib.abstract import EMA, ATR, ROCP
 from sklearn.linear_model import LinearRegression
 from os.path import isfile
 
@@ -16,15 +16,20 @@ class CLENOW_CALCULATOR(object):
     TRADING_DAYS = 250
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
-    def __init__(self, start, end, capital=1000000, window_reg=90, window_trend=200, window_atr=14, tickers=None, market_symbol='NIFTY50.NS'):
+    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI'):
         self.start = start
         self.end = end
         self.capital = capital
+        self.avg_move_per_name = avg_move_per_name
+        self.max_gap = 0.15
+        self.exit_thresh = exit_thresh
         self.window_reg = window_reg
         self.window_trend = window_trend
         self.window_atr = window_atr
         self.tickers= tickers
-        self.market_symbol = market_symbol
+        self.sectors = None if tickers is None else dict(zip(tickers, [None] *  len(tickers)))
+        self.bm_symbol = bm_symbol
+        self.bm_data_close = None
         self.data_adj_close = None
         self.data_high = None
         self.data_low = None
@@ -33,7 +38,16 @@ class CLENOW_CALCULATOR(object):
         self.regr_avg_ret = {}
         self.regr_r2 = {}
         self.regr_ovrl = {}
+        self.signal_trend = {}
+        self.signal_market_trend = None
+        self.signal_top_thresh = {}
+        self.signal_gap = {}
+        self.signal_is_valid = {}
+        self.prices_dict = {}
+        self.atr_dict = {}
+        self.position_table = None
         self.load_data()
+        self.load_benchmark_data()
         self.compute_indicators()
         
     def load_data(self):
@@ -42,6 +56,8 @@ class CLENOW_CALCULATOR(object):
             tickers = tickers_df['Symbol']
             tickers = ["{}.NS".format(symb) for symb in tickers]
             self.tickers = tickers
+            sectors = tickers_df['Industry']
+            self.sectors = dict(zip(self.tickers, sectors))
         cache_file_path = "{}stocks_history_cache//{}.csv".format(self.path, self.end)
         if isfile(cache_file_path):
             full_data = pd.read_csv(cache_file_path, header=[0, 1], index_col=0)
@@ -51,8 +67,10 @@ class CLENOW_CALCULATOR(object):
             yf.pdr_override()
             full_data = pdr.get_data_yahoo(self.tickers, self.start, self.end)
             self._get_failed_download_names(full_data)
+            full_data.to_csv(cache_file_path)
 
         full_data.fillna(method='bfill', inplace=True)
+        full_data.fillna(method='ffill', inplace=True)
         self.data_adj_close = full_data.loc[:, 'Adj Close']
         self.data_high = full_data.loc[:, 'High']
         self.data_low = full_data.loc[:, 'Low']
@@ -61,9 +79,23 @@ class CLENOW_CALCULATOR(object):
         for ticker in self.tickers:
             extra_cols.append('{} EMA'.format(ticker))
             extra_cols.append('{} ATR'.format(ticker))
+            extra_cols.append('{} ROCP'.format(ticker))
+            extra_cols.append('{} Gap'.format(ticker))
             extra_cols.append('{} log'.format(ticker))
             
         self.data_indicators = pd.DataFrame(index=self.data_adj_close.index.values, columns=extra_cols)
+        
+    def load_benchmark_data(self):
+        cache_file_path = "{}stocks_history_cache//bm_{}.csv".format(self.path, self.end)
+        if isfile(cache_file_path):
+            full_data = pd.read_csv(cache_file_path, index_col=0)
+            full_data.index = pd.to_datetime(full_data.index.values)
+        else:
+            full_data = yf.download(self.bm_symbol, self.start, self.end)
+            full_data.to_csv(cache_file_path)
+            
+        self.bm_data_close = full_data
+        self.bm_data_close['BM EMA'] = EMA(self.bm_data_close['Adj Close'], timeperiod=self.window_trend)
         
     def _get_failed_download_names(self, data):
         data_adj_close = data.loc[:, 'Adj Close']
@@ -73,26 +105,63 @@ class CLENOW_CALCULATOR(object):
             df = yf.download(ticker, self.start, self.end)
             for col in ['Adj Close', 'Close', 'Open', 'High', 'Low', 'Volume']:
                 data.loc[:, (col, ticker)] = df.loc[:, col].reindex(data.index.values).values
-        '''
-        for ticker in self.tickers:
-            check_col = "{} Adj Close".format(ticker)
-            check_ser = data.loc[:, check_col]
-            if len(check_ser.dropna())
-        '''
         
     def compute_indicators(self):
         for ticker in self.tickers:
             self.data_indicators.loc[:, '{} EMA'.format(ticker)] = EMA(self.data_adj_close[ticker], timeperiod=self.window_trend)
             self.data_indicators.loc[:, '{} ATR'.format(ticker)] = ATR(self.data_high[ticker], self.data_low[ticker], self.data_close[ticker], timeperiod=self.window_atr)
+            self.data_indicators.loc[:, '{} ROCP'.format(ticker)] = ROCP(self.data_close[ticker], timeperiod=1)
+            self.data_indicators.loc[:, '{} Gap'.format(ticker)] = np.where(np.abs(self.data_indicators['{} ROCP'.format(ticker)]) > self.max_gap, True, False)
             self.data_indicators.loc[:, '{} log'.format(ticker)] = np.log(self.data_adj_close[ticker])
             
     def calc_regression_metrics(self):
         for ticker in self.tickers:
             data_y = self.data_indicators.iloc[-self.window_reg:]['{} log'.format(ticker)]
-            data_y = data_y.fillna(method='ffill')
             data_X = np.arange(0, len(data_y)).reshape(-1,1)
             reg_out = LinearRegression().fit(data_X, data_y)
             self.regr_avg_ret[ticker] = ((1 + reg_out.coef_[0]) ** self.TRADING_DAYS) - 1
             self.regr_r2[ticker] = reg_out.score(data_X, data_y)
             self.regr_ovrl[ticker] = self.regr_avg_ret[ticker] * self.regr_r2[ticker]
+            
+    def calc_signals(self):
+        last_data_adj_close = self.data_adj_close.iloc[-1].to_dict()
+        last_data_indicators = self.data_indicators.iloc[-1].to_dict()
+        last_data_bm_close = self.bm_data_close.iloc[-1].to_dict()
+        self.position_table = pd.DataFrame(data={'ticker': list(self.regr_ovrl.keys()), 'Momentum Score': list(self.regr_ovrl.values())})
+        self.position_table['mom_rank'] = self.position_table['Momentum Score'].rank(ascending=False)
+        self.position_table.set_index('ticker', inplace=True)
+        rank_thresh = int(len(self.position_table) * self.exit_thresh)
+        self.position_table['include_by_rank'] = np.where(self.position_table['mom_rank'] <= rank_thresh, True, False)
+        self.signal_top_thresh = self.position_table['include_by_rank'].to_dict()
+        self.position_table.drop(columns=['include_by_rank'], inplace=True)
+        self.signal_market_trend = True if last_data_bm_close['Adj Close'] > last_data_bm_close['BM EMA'] else False
+        for ticker in self.tickers:
+            self.signal_trend[ticker] = True if last_data_adj_close[ticker] > last_data_indicators['{} EMA'.format(ticker)] else False
+            self.signal_gap[ticker] = np.max(self.data_indicators.iloc[-self.window_reg:]['{} Gap'.format(ticker)])
+            self.signal_is_valid[ticker] = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker]
+            self.prices_dict[ticker] = last_data_adj_close[ticker]
+            self.atr_dict[ticker] = last_data_indicators['{} ATR'.format(ticker)]
+            
+    def compute_position_sizes(self):
+        sector_df = pd.DataFrame(data={'ticker': list(self.sectors.keys()), 'Sector': list(self.sectors.values())})
+        sector_df.set_index('ticker', inplace=True)
+        price_df = pd.DataFrame(data={'ticker': list(self.prices_dict.keys()), 'Price': list(self.prices_dict.values())})
+        price_df.set_index('ticker', inplace=True)
+        signal_trend_df = pd.DataFrame(data={'ticker': list(self.signal_trend.keys()), 'isUpTrend': list(self.signal_trend.values())})
+        signal_gap_df = pd.DataFrame(data={'ticker': list(self.signal_gap.keys()), 'isGap': list(self.signal_gap.values())})
+        signal_top_df = pd.DataFrame(data={'ticker': list(self.signal_top_thresh.keys()), 'isTopPerc': list(self.signal_top_thresh.values())})
+        signal_trend_df.set_index('ticker', inplace=True)
+        signal_gap_df.set_index('ticker', inplace=True)
+        signal_top_df.set_index('ticker', inplace=True)
+        validity_df = pd.DataFrame(data={'ticker': list(self.signal_is_valid.keys()), 'isValid': list(self.signal_is_valid.values())})
+        validity_df.set_index('ticker', inplace=True)
+        atr_df = pd.DataFrame(data={'ticker': list(self.atr_dict.keys()), 'ATR': list(self.atr_dict.values())})
+        atr_df.set_index('ticker', inplace=True)
+        self.position_table = pd.concat([self.position_table, sector_df, price_df, signal_trend_df, signal_gap_df, signal_top_df, validity_df, atr_df], axis=1)
+        self.position_table['Shares Raw'] = np.floor((self.capital * self.avg_move_per_name)/self.position_table['ATR'])
+        self.position_table['Shares'] = np.where(self.position_table['isValid'], self.position_table['Shares Raw'], 0.0)
+        self.position_table['Allocation'] = self.position_table['Shares'] * self.position_table['Price']
+        self.position_table['Allocation %'] = self.position_table['Allocation']/self.capital
+        self.position_table.sort_values(by='mom_rank', ascending=True, inplace=True)
+        self.position_table['Allocation % cumul'] = self.position_table['Allocation %'].cumsum()
             
