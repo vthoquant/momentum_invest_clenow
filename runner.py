@@ -7,6 +7,7 @@ Created on Wed Sep  1 20:28:55 2021
 import argparse
 import datetime
 from clenow_calculator import CLENOW_CALCULATOR
+import warnings
 
 def main(
         run_name='default',
@@ -20,6 +21,7 @@ def main(
         window_trend=100,
         window_atr=20,
     ):
+    warnings.filterwarnings("ignore")
     today = datetime.datetime.today().strftime("%Y-%m-%d")
     end = end or today
     days_offset = int(max(window_reg, window_trend) * 1.5)
