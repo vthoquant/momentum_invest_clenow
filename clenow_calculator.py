@@ -10,12 +10,14 @@ import pandas as pd
 import numpy as np
 from talib.abstract import EMA, ATR, ROCP
 from sklearn.linear_model import LinearRegression
-from os.path import isfile
+from os.path import isfile, join
+from os import listdir
 
 class CLENOW_CALCULATOR(object):
     TRADING_DAYS = 250
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
+    stock_fundamentals_path = 'C:\\Users\\vivin\\Documents\\data\\my_portfolio\\'
     def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None):
         self.start = start
         self.end = end
@@ -44,11 +46,14 @@ class CLENOW_CALCULATOR(object):
         self.signal_market_trend = None
         self.signal_top_thresh = {}
         self.signal_gap = {}
+        self.signal_swot = {}
         self.signal_is_valid = {}
         self.prices_dict = {}
         self.atr_dict = {}
         self.position_table = None
+        self.swot_data = None
         self.load_data()
+        self.load_swot_data()
         self.load_benchmark_data()
         self.compute_indicators()
         
@@ -126,6 +131,7 @@ class CLENOW_CALCULATOR(object):
             self.regr_ovrl[ticker] = self.regr_avg_ret[ticker] * self.regr_r2[ticker]
             
     def calc_signals(self):
+        self.calc_swot_signals()
         last_data_adj_close = self.data_adj_close.iloc[-1].to_dict()
         last_data_indicators = self.data_indicators.iloc[-1].to_dict()
         last_data_bm_close = self.bm_data_close.iloc[-1].to_dict()
@@ -140,9 +146,35 @@ class CLENOW_CALCULATOR(object):
         for ticker in self.tickers:
             self.signal_trend[ticker] = True if last_data_adj_close[ticker] > last_data_indicators['{} EMA'.format(ticker)] else False
             self.signal_gap[ticker] = np.max(self.data_indicators.iloc[-self.window_reg:]['{} Gap'.format(ticker)])
-            self.signal_is_valid[ticker] = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker]
+            self.signal_is_valid[ticker] = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker] * (np.isnan(self.signal_swot[ticker]) or self.signal_swot[ticker])
             self.prices_dict[ticker] = last_data_adj_close[ticker]
             self.atr_dict[ticker] = last_data_indicators['{} ATR'.format(ticker)]
+    
+    
+    def calc_swot_signals(self):
+        swot_df = self.swot_data.reindex(self.tickers)
+        swot_df_nan = swot_df[np.isnan(swot_df['swot.ovrl_score'])]
+        swot_df_nonan = swot_df[~np.isnan(swot_df['swot.ovrl_score'])]
+        swot_df_nonan['isSwotOK'] = swot_df_nonan['swot.ovrl_score'] >= 0.5
+        swot_df_nonan['isOverallOK'] = swot_df['mci.overall'].isin(['Mid range performer', 'Mid-range performer', 'Strong Performer', 'Unrated'])
+        swot_df_nonan['swot_signal'] = swot_df_nonan['isSwotOK'] & swot_df_nonan['isOverallOK']
+        swot_df_nonan.drop(columns=['isSwotOK', 'isOverallOK'], inplace=True)
+        swot_df_nan['swot_signal'] = np.nan
+        swot_df = pd.concat([swot_df_nonan, swot_df_nan])
+        self.signal_swot = swot_df['swot_signal'].to_dict()
+    
+    def load_swot_data(self):
+        all_files = [f for f in listdir(self.stock_fundamentals_path) if isfile(join(self.stock_fundamentals_path, f))]
+        all_available_sectors = [f.split(".")[0] for f in all_files if '.html' in f]
+        df_arr = []
+        for sector in all_available_sectors:
+            df_temp = pd.read_csv("{}{}.csv".format(self.stock_fundamentals_path, sector))
+            df_arr.append(df_temp)
+        df = pd.concat(df_arr, axis=0)
+        df.drop_duplicates('ticker', inplace=True)
+        df.set_index('ticker', inplace=True)
+        self.swot_data = df[['mci.overall', 'mci.pio_score', 'swot.ovrl_score']]
+    
             
     def compute_position_sizes(self):
         sector_df = pd.DataFrame(data={'ticker': list(self.sectors.keys()), 'Sector': list(self.sectors.values())})
@@ -152,14 +184,16 @@ class CLENOW_CALCULATOR(object):
         signal_trend_df = pd.DataFrame(data={'ticker': list(self.signal_trend.keys()), 'isUpTrend': list(self.signal_trend.values())})
         signal_gap_df = pd.DataFrame(data={'ticker': list(self.signal_gap.keys()), 'isGap': list(self.signal_gap.values())})
         signal_top_df = pd.DataFrame(data={'ticker': list(self.signal_top_thresh.keys()), 'isTopPerc': list(self.signal_top_thresh.values())})
+        signal_swot_df = pd.DataFrame(data={'ticker': list(self.signal_swot.keys()), 'isSwotOK': list(self.signal_swot.values())})
         signal_trend_df.set_index('ticker', inplace=True)
         signal_gap_df.set_index('ticker', inplace=True)
         signal_top_df.set_index('ticker', inplace=True)
+        signal_swot_df.set_index('ticker', inplace=True)
         validity_df = pd.DataFrame(data={'ticker': list(self.signal_is_valid.keys()), 'isValid': list(self.signal_is_valid.values())})
         validity_df.set_index('ticker', inplace=True)
         atr_df = pd.DataFrame(data={'ticker': list(self.atr_dict.keys()), 'ATR': list(self.atr_dict.values())})
         atr_df.set_index('ticker', inplace=True)
-        self.position_table = pd.concat([self.position_table, sector_df, price_df, signal_trend_df, signal_gap_df, signal_top_df, validity_df, atr_df], axis=1)
+        self.position_table = pd.concat([self.position_table, sector_df, price_df, signal_trend_df, signal_gap_df, signal_top_df, signal_swot_df, validity_df, atr_df], axis=1)
         self.position_table['Shares Raw'] = np.floor((self.capital * self.avg_move_per_name)/self.position_table['ATR'])
         self.position_table['Shares'] = np.where(self.position_table['isValid'], self.position_table['Shares Raw'], 0.0)
         self.position_table['Allocation'] = self.position_table['Shares'] * self.position_table['Price']
