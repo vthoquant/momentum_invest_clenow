@@ -7,17 +7,33 @@ Created on Wed Sep  1 20:28:55 2021
 import argparse
 import datetime
 from clenow_calculator import CLENOW_CALCULATOR
-from fundamental_scraping.utils import utils
+from fundamental_scraping.utils import utils as logger_utils
+from utils import utils
+import pandas as pd
+import numpy as np
 import warnings
 import sys
 
 PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
+
+def _get_prev_realized_positions(run_name, today, path, logger):
+    #capital not explicitly passed. calculate from previos portfolio
+    prev_date = utils.compute_comparison_date(run_name, today, path, logger)
+    fn_prev = '{}_{}'.format(run_name, prev_date)
+    df_prev = pd.read_csv("{}{}.csv".format(PATH, fn_prev))
+    df_prev.set_index('ticker', inplace=True)
+    if 'Realized Price' not in df_prev.columns.values:
+        logger.error('Realized Price column not present in the comparison file. will not be able to compute current capital. populate these cols')
+        sys.exit(1)
+    df_prev_positions = df_prev[~np.isnan(df_prev['Realized Price'])]
+    return df_prev_positions['Realized Price'], df_prev_positions['Shares']    
 
 def main(
         run_name='default',
         start=None,
         end=None,
         capital=1000000,
+        extra_capital=None,
         avg_move_per_name=0.001,
         max_gap=0.15,
         exit_thresh=0.2,
@@ -27,18 +43,24 @@ def main(
     ):
     try:
         warnings.filterwarnings("ignore")
-        logger = utils.configure_logging(__name__, "{}\\logs\\clenow_calculator.log".format(PATH))
-        today = datetime.datetime.today().strftime("%Y-%m-%d")
-        end = end or today
+        logger = logger_utils.configure_logging(__name__, "{}\\logs\\clenow_calculator.log".format(PATH))
+        today = datetime.datetime.today()
+        today_str = today.strftime("%Y-%m-%d")
+        end = end or today_str
         days_offset = int(max(window_reg, window_trend) * 1.5)
         start_offsetted = datetime.datetime.strptime(end, "%Y-%m-%d") - datetime.timedelta(days=days_offset)
         start = start or start_offsetted.strftime("%Y-%m-%d")
         file_name = "{}_{}".format(run_name, end)
+        realized_prices, shares = _get_prev_realized_positions(run_name, today, PATH, logger)
+            
         logger.info('Initializing the clenow calculator')
         calc = CLENOW_CALCULATOR(
             start, 
             end, 
-            capital=capital, 
+            capital=capital,
+            realized_prices=realized_prices,
+            shares=shares,
+            extra_capital=extra_capital,
             avg_move_per_name=avg_move_per_name, 
             max_gap=max_gap, 
             exit_thresh=exit_thresh, 
@@ -55,6 +77,7 @@ def main(
         logger.info('computing position sizes')
         calc.compute_position_sizes()
         logger.info('saving down the portfolio data')
+        calc.pad_realized_values()
         calc.save_rebalanced_portfolio()
         sys.exit(0)
     except Exception as e:
@@ -66,7 +89,8 @@ if __name__ == "__main__":
     parser.add_argument('--run_name', default='momentum-port-default')
     parser.add_argument('--start', default=None)
     parser.add_argument('--end', default=None)
-    parser.add_argument('--capital', default=1000000, type=int)
+    parser.add_argument('--capital', default=None)
+    parser.add_argument('--extra_capital', default=None)
     parser.add_argument('--avg_move_per_name', default=0.001, type=float)
     parser.add_argument('--max_gap', default=0.15, type=float)
     parser.add_argument('--exit_thresh', default=0.2, type=float)
@@ -79,6 +103,7 @@ if __name__ == "__main__":
         start=args.start,
         end=args.end,
         capital=args.capital,
+        extra_capital=args.extra_capital,
         avg_move_per_name=args.avg_move_per_name,
         max_gap=args.max_gap,
         exit_thresh=args.exit_thresh,

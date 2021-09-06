@@ -18,10 +18,11 @@ class CLENOW_CALCULATOR(object):
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
     stock_fundamentals_path = 'C:\\Users\\vivin\\Documents\\data\\my_portfolio\\'
-    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None, logger=None):
+    def __init__(self, start, end, capital=1000000, shares=None, realized_prices=None, extra_capital=None, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None, logger=None):
         self.start = start
         self.end = end
-        self.capital = capital
+        self.shares = shares
+        self.realized_prices = realized_prices
         self.avg_move_per_name = avg_move_per_name
         self.max_gap = 0.15
         self.exit_thresh = exit_thresh
@@ -54,10 +55,22 @@ class CLENOW_CALCULATOR(object):
         self.position_table = None
         self.swot_data = None
         self.load_data()
+        self.compute_capital_from_prev(capital, shares, extra_capital)
         self.load_swot_data()
         self.load_benchmark_data()
         self.compute_indicators()
         
+    def compute_capital_from_prev(self, capital, shares, extra_capital):
+        if capital is not None:
+            self.capital=capital
+        else:
+            prices = self.data_adj_close.iloc[-1]
+            prices = prices.reindex(shares.index.values)
+            curr_portfolio_value = np.dot(prices, shares)
+            total_value = curr_portfolio_value if extra_capital is None else curr_portfolio_value + extra_capital
+            self.capital = total_value
+        
+    
     def load_data(self):
         if self.tickers is None:
             tickers_df = pd.read_csv("{}{}.csv".format(self.path, self.pop_file_name))
@@ -213,6 +226,14 @@ class CLENOW_CALCULATOR(object):
         self.position_table['Allocation %'] = self.position_table['Allocation']/self.capital
         self.position_table.sort_values(by='mom_rank', ascending=True, inplace=True)
         self.position_table['Allocation % cumul'] = self.position_table['Allocation %'].cumsum()
+        
+    def pad_realized_values(self):
+        if self.shares is not None:
+            df_realized = pd.DataFrame(index=self.shares.index.values, columns=['Realized Price', 'Realized Value', 'Cumul Portfolio Value', 'Cumul Portoflio %'])
+            df_realized.loc[:, 'Realized Price'] = self.realized_prices
+            df_realized = df_realized.reindex(self.position_table.index.values)
+            df_realized.index.name = 'ticker'
+            self.position_table = pd.concat([self.position_table, df_realized], axis=1)
         
     def save_rebalanced_portfolio(self):
         full_path = "{}{}.csv".format(self.path, self.file_name)
