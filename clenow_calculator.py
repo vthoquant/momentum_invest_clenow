@@ -18,7 +18,7 @@ class CLENOW_CALCULATOR(object):
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
     stock_fundamentals_path = 'C:\\Users\\vivin\\Documents\\data\\my_portfolio\\'
-    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None):
+    def __init__(self, start, end, capital=1000000, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None, logger=None):
         self.start = start
         self.end = end
         self.capital = capital
@@ -33,6 +33,7 @@ class CLENOW_CALCULATOR(object):
         self.bm_symbol = bm_symbol
         self.path = path or self.path
         self.file_name = file_name or 'default'
+        self.logger = logger
         self.bm_data_close = None
         self.data_adj_close = None
         self.data_high = None
@@ -69,15 +70,22 @@ class CLENOW_CALCULATOR(object):
         if isfile(cache_file_path):
             full_data = pd.read_csv(cache_file_path, header=[0, 1], index_col=0)
             full_data.index = pd.to_datetime(full_data.index.values)
-            self._get_failed_download_names(full_data)
+            failed_again = self._get_failed_download_names(full_data)
         else:
             yf.pdr_override()
             full_data = pdr.get_data_yahoo(self.tickers, self.start, self.end)
-            self._get_failed_download_names(full_data)
+            failed_again = self._get_failed_download_names(full_data)
             full_data.to_csv(cache_file_path)
 
+        log_failed_downloads = self.logger is not None and len(failed_again)
+        if log_failed_downloads:
+            self.logger.warning('failed downloading for {}. Please try re-running this program at a later time'.format(failed_again))
         full_data.fillna(method='bfill', inplace=True)
         full_data.fillna(method='ffill', inplace=True)
+        if log_failed_downloads:
+            self.logger.warning('padding the failed downloads with a price of 1.0 for all dates. make sure these names are ignored: {}'.format(failed_again))
+        if len(failed_again):
+            full_data.fillna(1.0, inplace=True)
         self.data_adj_close = full_data.loc[:, 'Adj Close']
         self.data_high = full_data.loc[:, 'High']
         self.data_low = full_data.loc[:, 'Low']
@@ -108,10 +116,15 @@ class CLENOW_CALCULATOR(object):
         data_adj_close = data.loc[:, 'Adj Close']
         data_adj_close_dropped = data_adj_close.dropna(how='all', axis=1)
         tickers_dropped = data_adj_close.columns.values[~np.isin(data_adj_close.columns.values, data_adj_close_dropped.columns.values)]
+        failed_again = []
         for ticker in tickers_dropped:
             df = yf.download(ticker, self.start, self.end)
+            if len(df) == 0:
+                failed_again.append(ticker)
             for col in ['Adj Close', 'Close', 'Open', 'High', 'Low', 'Volume']:
                 data.loc[:, (col, ticker)] = df.loc[:, col].reindex(data.index.values).values
+                
+        return failed_again
         
     def compute_indicators(self):
         for ticker in self.tickers:
