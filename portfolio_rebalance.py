@@ -6,7 +6,6 @@ Created on Mon Sep  6 12:38:44 2021
 """
 import argparse
 import datetime
-from fundamental_scraping.utils import utils as logger_utils
 from utils import utils
 import warnings
 import sys
@@ -48,7 +47,7 @@ def main(
     ):
     try:
         warnings.filterwarnings("ignore")
-        logger = logger_utils.configure_logging(__name__, "{}\\logs\\portoflio_rebalance.log".format(PATH))
+        logger = utils.configure_logging(__name__, "{}\\logs\\portoflio_rebalance.log".format(PATH))
         today = datetime.datetime.today()
         today_str = today.strftime("%Y-%m-%d")
         run_date = run_date or today_str
@@ -82,8 +81,8 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='parse arguments')
     parser.add_argument('--run_name', default='momentum-port-default')
-    parser.add_argument('--run_date', default='2021-09-06')
-    parser.add_argument('--compare_date', default='2021-09-02')
+    parser.add_argument('--run_date', default=None)
+    parser.add_argument('--compare_date', default=None)
     args = parser.parse_args()
     main(
         run_name=args.run_name,

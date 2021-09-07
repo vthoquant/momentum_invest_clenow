@@ -7,7 +7,6 @@ Created on Wed Sep  1 20:28:55 2021
 import argparse
 import datetime
 from clenow_calculator import CLENOW_CALCULATOR
-from fundamental_scraping.utils import utils as logger_utils
 from utils import utils
 import pandas as pd
 import numpy as np
@@ -43,7 +42,7 @@ def main(
     ):
     try:
         warnings.filterwarnings("ignore")
-        logger = logger_utils.configure_logging(__name__, "{}\\logs\\clenow_calculator.log".format(PATH))
+        logger = utils.configure_logging(__name__, "{}\\logs\\clenow_calculator.log".format(PATH))
         today = datetime.datetime.today()
         today_str = today.strftime("%Y-%m-%d")
         end = end or today_str
