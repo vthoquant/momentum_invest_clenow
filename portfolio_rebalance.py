@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 
 PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
-SHARES_DIFF_THRESH = 0.1
+SHARES_DIFF_THRESH = 0.2
 
 def _get_index_disqualified(df_prev, df_curr):
     prev_names = df_prev.index.values
