@@ -14,6 +14,7 @@ import warnings
 import sys
 
 PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
+INCLUDE_OVERRIDE = ['JKPAPER.NS']
 
 def _get_prev_realized_positions(run_name, today, path, logger):
     #capital not explicitly passed. calculate from previos portfolio
@@ -66,6 +67,7 @@ def main(
             window_reg=window_reg, 
             window_trend=window_trend, 
             window_atr=window_atr,
+            include_override=INCLUDE_OVERRIDE,
             file_name=file_name,
             path=PATH,
             logger=logger

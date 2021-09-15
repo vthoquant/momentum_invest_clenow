@@ -18,7 +18,7 @@ class CLENOW_CALCULATOR(object):
     pop_file_name = 'ind_nifty500list'
     path = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
     stock_fundamentals_path = 'C:\\Users\\vivin\\Documents\\data\\my_portfolio\\'
-    def __init__(self, start, end, capital=1000000, shares=None, realized_prices=None, extra_capital=None, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', path=None, file_name=None, logger=None):
+    def __init__(self, start, end, capital=1000000, shares=None, realized_prices=None, extra_capital=None, avg_move_per_name=0.001, max_gap=0.15, exit_thresh=0.2, window_reg=90, window_trend=100, window_atr=20, tickers=None, bm_symbol='^NSEI', include_override=None, path=None, file_name=None, logger=None):
         self.start = start
         self.end = end
         self.shares = shares
@@ -32,6 +32,7 @@ class CLENOW_CALCULATOR(object):
         self.tickers= tickers
         self.sectors = None if tickers is None else dict(zip(tickers, [None] *  len(tickers)))
         self.bm_symbol = bm_symbol
+        self.include_override = include_override or []
         self.path = path or self.path
         self.file_name = file_name or 'default'
         self.logger = logger
@@ -172,7 +173,8 @@ class CLENOW_CALCULATOR(object):
         for ticker in self.tickers:
             self.signal_trend[ticker] = True if last_data_adj_close[ticker] > last_data_indicators['{} EMA'.format(ticker)] else False
             self.signal_gap[ticker] = np.max(self.data_indicators.iloc[-self.window_reg:]['{} Gap'.format(ticker)])
-            self.signal_is_valid[ticker] = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker] * (np.isnan(self.signal_swot[ticker]) or self.signal_swot[ticker])
+            signal_is_valid = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker] * (np.isnan(self.signal_swot[ticker]) or self.signal_swot[ticker])
+            self.signal_is_valid[ticker] = signal_is_valid or (ticker in self.include_override)
             self.prices_dict[ticker] = last_data_adj_close[ticker]
             self.atr_dict[ticker] = last_data_indicators['{} ATR'.format(ticker)]
     
