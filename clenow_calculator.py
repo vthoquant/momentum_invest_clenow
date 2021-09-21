@@ -173,7 +173,7 @@ class CLENOW_CALCULATOR(object):
         for ticker in self.tickers:
             self.signal_trend[ticker] = True if last_data_adj_close[ticker] > last_data_indicators['{} EMA'.format(ticker)] else False
             self.signal_gap[ticker] = np.max(self.data_indicators.iloc[-self.window_reg:]['{} Gap'.format(ticker)])
-            signal_is_valid = self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker] * (np.isnan(self.signal_swot[ticker]) or self.signal_swot[ticker])
+            signal_is_valid = bool(self.signal_trend[ticker] * (not self.signal_gap[ticker]) * self.signal_top_thresh[ticker] * (np.isnan(self.signal_swot[ticker]) or self.signal_swot[ticker]))
             self.signal_is_valid[ticker] = signal_is_valid or (ticker in self.include_override)
             self.prices_dict[ticker] = last_data_adj_close[ticker]
             self.atr_dict[ticker] = last_data_indicators['{} ATR'.format(ticker)]

@@ -29,7 +29,7 @@ def _get_criteria_disqualified(df_prev, df_curr, logger):
         logger.warning("seems like the prevoius portfolio has a position whcih was not classified as valid at that time. please check!")
     else:
         logger.info("all previous positions were valid as of that date")
-    disqualified_df = df_curr[df_curr['isValid'] == 0].reindex(prev_positions.index.values).dropna(how='all', axis=0)
+    disqualified_df = df_curr[~df_curr['isValid']].reindex(prev_positions.index.values).dropna(how='all', axis=0)
     return disqualified_df
 
 def _get_rebalanced_positions_from_prev(df_prev, df_curr):
