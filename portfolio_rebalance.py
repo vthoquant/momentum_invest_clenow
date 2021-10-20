@@ -37,7 +37,7 @@ def _get_rebalanced_positions_from_prev(df_prev, df_curr):
     prev_positions.rename(columns={'Shares': 'Shares_prev'}, inplace=True)
     curr_positions = df_curr.reindex(prev_positions.index.values)[['Price', 'Shares']]
     curr_positions = pd.concat([prev_positions, curr_positions], axis=1)
-    curr_positions['Position_rebalance_req'] = np.where(np.abs(curr_positions['Shares'] - curr_positions['Shares_prev'])/curr_positions['Shares'] > SHARES_DIFF_THRESH, True, False)
+    curr_positions['Position_rebalance_req'] = np.where(np.abs(curr_positions['Shares'] - curr_positions['Shares_prev'])/curr_positions['Shares_prev'] > SHARES_DIFF_THRESH, True, False)
     return curr_positions
 
 def main(
