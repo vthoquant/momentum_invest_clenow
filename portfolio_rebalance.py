@@ -16,10 +16,11 @@ PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
 SHARES_DIFF_THRESH = 0.2
 
 def _get_index_disqualified(df_prev, df_curr):
-    prev_names = df_prev.index.values
+    prev_positions = df_prev[~np.isnan(df_prev['Realized Price'])]
+    prev_pos_names = prev_positions.index.values
     curr_names = df_curr.index.values
-    index_disql = prev_names[~np.isin(prev_names, curr_names)]
-    return df_prev[index_disql] if len(index_disql) else pd.DataFrame()
+    index_disql = prev_pos_names[~np.isin(prev_pos_names, curr_names)]
+    return prev_positions.loc[index_disql, :] if len(index_disql) else pd.DataFrame()
 
 def _get_criteria_disqualified(df_prev, df_curr, logger):
     prev_positions = df_prev[~np.isnan(df_prev['Realized Price'])]
