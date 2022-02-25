@@ -14,7 +14,7 @@ import warnings
 import sys
 
 PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
-INCLUDE_OVERRIDE = ['TVSMOTOR.NS', 'BRIGADE.NS', 'LTI.NS', 'TATAPOWER.NS', 'KEI.NS', 'NETWORK18.NS', 'ZEEL.NS', 'IDEA.NS', 'GUJALKALI.NS', 'ONGC.NS', 'TRIDENT.NS', 'CARBORUNIV.NS']
+INCLUDE_OVERRIDE = ['ELGIEQUIP.NS', 'SHARDACROP.NS', 'TV18BRDCST.NS', 'ASAHIINDIA.NS', 'WELCORP.NS', 'ATGL.NS', 'GRINDWELL.NS', 'ABB.NS', 'BEML.NS', 'ABFRL.NS', 'BRIGADE.NS', 'BAJAJHLDNG.NS', 'JAMNAAUTO.NS', 'CENTURYPLY.NS', 'PERSISTENT.NS', 'UNIONBANK.NS', 'TRITURBINE.NS', 'TITAN.NS', 'MCDOWELL-N.NS', 'TATAPOWER.NS', 'KEI.NS', 'GUJALKALI.NS', 'ONGC.NS']
 
 def _get_prev_realized_positions(run_name, today, path, logger):
     #capital not explicitly passed. calculate from previos portfolio

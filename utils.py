@@ -17,12 +17,12 @@ class utils(object):
         prev_dt_str = prev_dt.strftime("%Y-%m-%d")
         fn = '{}_{}'.format(run_name, prev_dt_str)
         tries = 0
-        while not isfile('{}{}.csv'.format(path, fn)) and tries < 20:
+        while not isfile('{}{}.csv'.format(path, fn)) and tries < 50:
             tries = tries + 1
             prev_dt = prev_dt - datetime.timedelta(days=1)
             prev_dt_str = prev_dt.strftime("%Y-%m-%d")
             fn = '{}_{}'.format(run_name, prev_dt_str)
-        if tries == 20:
+        if tries == 50:
             logger.error('couldnt find appropriate comparison file. program is exiting')
             return None
         compare_date = prev_dt_str
