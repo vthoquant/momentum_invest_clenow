@@ -14,7 +14,8 @@ import warnings
 import sys
 
 PATH = 'C:\\Users\\vivin\\Documents\\data\\momentum_clenow\\'
-INCLUDE_OVERRIDE = ['ELGIEQUIP.NS', 'SHARDACROP.NS', 'TV18BRDCST.NS', 'ASAHIINDIA.NS', 'WELCORP.NS', 'ATGL.NS', 'GRINDWELL.NS', 'ABB.NS', 'BEML.NS', 'ABFRL.NS', 'BRIGADE.NS', 'BAJAJHLDNG.NS', 'JAMNAAUTO.NS', 'CENTURYPLY.NS', 'PERSISTENT.NS', 'UNIONBANK.NS', 'TRITURBINE.NS', 'TITAN.NS', 'MCDOWELL-N.NS', 'TATAPOWER.NS', 'KEI.NS', 'GUJALKALI.NS', 'ONGC.NS']
+INCLUDE_OVERRIDE = ['MRPL.NS', 'BDL.NS', 'CGCL.NS', 'BSE.NS', 'KPITTECH.NS', 'THERMAX.NS', 'CGPOWER.NS', 'TIINDIA.NS', 'MINDAID.NS', 'SHARDACROP.NS', 'TV18BRDCST.NS', 'WELCORP.NS', 'ATGL.NS', 'GRINDWELL.NS', 'TRITURBINE.NS', 'TATAPOWER.NS', 'KEI.NS', 'GUJALKALI.NS', 'ONGC.NS']
+WINDOW_TREND = 200
 
 def _get_prev_realized_positions(run_name, today, path, logger):
     #capital not explicitly passed. calculate from previos portfolio
@@ -38,7 +39,7 @@ def main(
         max_gap=0.15,
         exit_thresh=0.2,
         window_reg=90,
-        window_trend=100,
+        window_trend=WINDOW_TREND,
         window_atr=20,
     ):
     try:
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_gap', default=0.15, type=float)
     parser.add_argument('--exit_thresh', default=0.2, type=float)
     parser.add_argument('--window_reg', default=90, type=int)
-    parser.add_argument('--window_trend', default=100, type=int)
+    parser.add_argument('--window_trend', default=200, type=int)
     parser.add_argument('--window_atr', default=20, type=int)
     args = parser.parse_args()
     main(
